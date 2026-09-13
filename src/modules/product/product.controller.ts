@@ -53,44 +53,12 @@ export async function getProductByIdController(
 }
 
 export async function getProductsController(
-  req: Request,
+  _req: Request,
   res: Response,
 ): Promise<void> {
-  const page = Math.max(Number(req.query.page) || 1, 1);
-  const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+  const query = res.locals.validated;
 
-  const search =
-    typeof req.query.search === "string" ? req.query.search.trim() : undefined;
-
-  const categoryId =
-    typeof req.query.search === "string"
-      ? Number(req.query.categoryId)
-      : undefined;
-
-  const allowedSorts = ["created_at", "price", "name"] as const;
-
-  const requestedSort =
-    typeof req.query.sort === "string" ? req.query.sort : "created_at";
-
-  const sort = allowedSorts.includes(
-    requestedSort as (typeof allowedSorts)[number],
-  )
-    ? (requestedSort as (typeof allowedSorts)[number])
-    : "created_at";
-
-  const requestedOrder =
-    typeof req.query.order === "string" ? req.query.order : "desc";
-
-  const order = requestedOrder === "asc" ? "asc" : "desc";
-
-  const result = await findProducts({
-    page,
-    limit,
-    search,
-    categoryId,
-    sort,
-    order,
-  });
+  const result = await findProducts(query);
 
   res.status(200).json({
     success: true,

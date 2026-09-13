@@ -1,3 +1,4 @@
+import { AppError } from "../../utils/app-error.js";
 import {
   createProduct as CreateProductRepository,
   findProductById as findProductByIdRepository,
@@ -30,7 +31,7 @@ export async function findProductById(productId: number): Promise<Product> {
   const product = await findProductByIdRepository(productId);
 
   if (!product) {
-    throw new Error("Product not found");
+    throw new AppError("Product not found", 404);
   }
   return product;
 }
