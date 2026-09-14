@@ -10,6 +10,10 @@ interface PostgresError extends Error {
   constraint?: string;
 }
 
+interface BodyParserError extends Error {
+  type?: string;
+}
+
 export function errorHandler(
   error: unknown,
   req: Request,
@@ -41,6 +45,25 @@ export function errorHandler(
     res.status(error.statusCode).json({
       success: false,
       message: error.message,
+    });
+
+    return;
+  }
+  const bodyParserError = error as BodyParserError;
+
+  if (bodyParserError.type === "entity.too.large") {
+    res.status(413).json({
+      success: false,
+      message: "Request body is too large",
+    });
+
+    return;
+  }
+
+  if (bodyParserError.type === "entity.parse.failed") {
+    res.status(400).json({
+      success: false,
+      message: "Invalid JSON payload",
     });
 
     return;
