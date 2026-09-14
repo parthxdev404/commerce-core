@@ -10,6 +10,7 @@ import { requestIdMiddleware } from "./middleware/request-id.js";
 import { requestLoggerMiddleware } from "./middleware/request-logger.js";
 import { securityHeaders } from "./middleware/security.middlware.js";
 import { corsMiddleware } from "./middleware/cors.middleware.js";
+import { authRouter } from "./modules/auth/auth.routes.js";
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use(requestIdMiddleware);
 app.use(requestLoggerMiddleware);
 app.use("/health", healthRouter);
 app.use("/api/products", productRouter);
+app.use("/api/auth", authRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
