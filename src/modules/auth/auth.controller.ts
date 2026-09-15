@@ -3,6 +3,10 @@ import type { Request, Response } from "express";
 import { loginUser, registerUser } from "./auth.service.js";
 
 import type { LoginInput, RegisterInput } from "./auth.schema.js";
+import {
+  accessTokenCookieOptions,
+  refreshTokenCookieOptions,
+} from "../../config/cookie.js";
 
 export async function registerController(
   _req: Request,
@@ -30,7 +34,10 @@ export async function loginController(
 ): Promise<void> {
   const input = res.locals.validated as LoginInput;
 
-  const user = await loginUser(input);
+  const { user, accessToken, refreshToken } = await loginUser(input);
+
+  res.cookie("access_token", accessToken, accessTokenCookieOptions);
+  res.cookie("refresh_token", refreshToken, refreshTokenCookieOptions);
 
   res.status(200).json({
     success: true,
@@ -41,5 +48,7 @@ export async function loginController(
       lastName: user.lastName,
       roleId: user.roleId,
     },
+    accessToken,
+    refreshToken,
   });
 }

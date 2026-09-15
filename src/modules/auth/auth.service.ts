@@ -3,6 +3,7 @@ import { createUser, findUserByEmail } from "./auth.repository.js";
 import { comparePassword, hashPassword } from "./password.service.js";
 import type { LoginInput, RegisterInput } from "./auth.schema.js";
 import type { User } from "./auth.types.js";
+import { generateAccessToken, generateRefreshToken } from "./token.service.js";
 
 export async function registerUser(input: RegisterInput): Promise<User> {
   const existingUser = await findUserByEmail(input.email);
@@ -25,7 +26,11 @@ export async function registerUser(input: RegisterInput): Promise<User> {
   return user;
 }
 
-export async function loginUser(input: LoginInput): Promise<User> {
+export async function loginUser(input: LoginInput): Promise<{
+  user: User;
+  accessToken: string;
+  refreshToken: string;
+}> {
   const user = await findUserByEmail(input.email);
 
   if (!user) {
@@ -49,5 +54,8 @@ export async function loginUser(input: LoginInput): Promise<User> {
     throw new AppError("Invalid email or password", 401);
   }
 
-  return user;
+  const accessToken = generateAccessToken(user.id, user.roleId);
+  const refreshToken = generateRefreshToken(user.id);
+
+  return { user, accessToken, refreshToken };
 }

@@ -5,16 +5,16 @@ import type { CreateUserInput, User } from "./auth.types.js";
 export async function findUserByEmail(email: string): Promise<User | null> {
   const result = await db.query(
     `
-      SELECT
-        id,
-        role_id,
-        email,
-        password_hash,
-        first_name,
-        last_name,
-        is_active,
-        created_at,
-        updated_at
+    SELECT
+  id,
+  role_id AS "roleId",
+  email,
+  password_hash AS "passwordHash",
+  first_name AS "firstName",
+  last_name AS "lastName",
+  is_active AS "isActive",
+  created_at AS "createdAt",
+  updated_at AS "updatedAt"
       FROM users
       WHERE email = $1
       LIMIT 1;
@@ -37,19 +37,20 @@ export async function createUser(input: CreateUserInput): Promise<User> {
         email,
         password_hash,
         first_name,
-        last_name
+        last_name,
+        is_active
       )
-      VALUES ($1, $2, $3, $4, $5)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING
         id,
-        role_id,
+        role_id AS "roleId",
         email,
-        password_hash,
-        first_name,
-        last_name,
-        is_active,
-        created_at,
-        updated_at;
+        password_hash AS "passwordHash",
+        first_name AS "firstName",
+        last_name AS "lastName",
+        is_active AS "isActive",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt";
     `,
     [
       input.roleId,
@@ -69,14 +70,14 @@ export async function findUserById(userId: number): Promise<User | null> {
     `
       SELECT
         id,
-        role_id,
+        role_id AS "roleId",
         email,
-        password_hash,
-        first_name,
-        last_name,
-        is_active,
-        created_at,
-        updated_at
+        password_hash AS "passwordHash",
+        first_name AS "firstName",
+        last_name AS "lastName",
+        is_active AS "isActive",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
       FROM users
       WHERE id = $1
       LIMIT 1;
