@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import { env } from "../../config/env.js";
-
+import { AppError } from "../../utils/app-error.js";
 interface AccessTokenPayload {
   sub: string;
   roleId: number;
@@ -29,4 +29,25 @@ export function generateRefreshToken(userId: number): string {
   return jwt.sign(payload, env.JWT_REFRESH_SECRET, {
     expiresIn: "7d",
   });
+}
+
+export function verifyRefreshToken(token: string): RefreshTokenPayload {
+  try {
+    const payload = jwt.verify(
+      token,
+      env.JWT_REFRESH_SECRET,
+    ) as RefreshTokenPayload;
+
+    if (typeof payload.sub !== "string" || !payload.sub) {
+      throw new AppError("Invalid refresh token", 401);
+    }
+
+    return payload;
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    throw new AppError("Invalid or expired refresh token", 401);
+  }
 }
