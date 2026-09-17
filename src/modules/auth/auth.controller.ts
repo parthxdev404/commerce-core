@@ -60,16 +60,35 @@ export async function loginController(
   });
 }
 
-export async function getMe(req: Request, res: Response): Promise<void> {
-  const user = req.user;
+export async function getMeController(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  if (!req.user) {
+    throw new AppError("Authentication required", 401);
+  }
+
+  const user = await findUserById(req.user.id);
 
   if (!user) {
-    throw new AppError("Authentication Required", 401);
+    throw new AppError("User account not found", 401);
+  }
+
+  if (!user.isActive) {
+    throw new AppError("Account is inactive", 403);
   }
 
   res.status(200).json({
     success: true,
-    data: user,
+    data: {
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        roleId: user.roleId,
+      },
+    },
   });
 }
 

@@ -1,7 +1,7 @@
 import { Router } from "express";
 
 import {
-  getMe,
+  getMeController,
   loginController,
   logOutController,
   refreshController,
@@ -14,6 +14,10 @@ import { validate } from "../../middleware/validate.middleware.js";
 
 import { asyncHandler } from "../../utils/async-handler.js";
 import { authenticate } from "../../middleware/auth.middlware.js";
+import {
+  loginRateLimiter,
+  refreshRateLimiter,
+} from "../../middleware/rate-limit.middleware.js";
 
 const authRouter = Router();
 
@@ -23,8 +27,17 @@ authRouter.post(
   asyncHandler(registerController),
 );
 
-authRouter.post("/login", validate(loginSchema), asyncHandler(loginController));
-authRouter.get("/me", authenticate, asyncHandler(getMe));
-authRouter.post("/refresh", asyncHandler(refreshController));
+authRouter.post(
+  "/login",
+  loginRateLimiter,
+  validate(loginSchema),
+  asyncHandler(loginController),
+);
+authRouter.get("/me", authenticate, asyncHandler(getMeController));
+authRouter.post(
+  "/refresh",
+  refreshRateLimiter,
+  asyncHandler(refreshController),
+);
 authRouter.post("/logout", asyncHandler(logOutController));
 export { authRouter };
