@@ -11,6 +11,7 @@ import { requestLoggerMiddleware } from "./middleware/request-logger.js";
 import { securityHeaders } from "./middleware/security.middlware.js";
 import { corsMiddleware } from "./middleware/cors.middleware.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
+import { categoryRouter } from "./modules/category/category.routes.js";
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use(requestLoggerMiddleware);
 app.use("/health", healthRouter);
 app.use("/api/products", productRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/categories", categoryRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
