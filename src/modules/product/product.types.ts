@@ -27,6 +27,8 @@ export interface ProductListQuery {
   categoryId?: number;
   sort: "created_at" | "price" | "name";
   order: "asc" | "desc";
+  minPrice: number;
+  maxPrice: number;
 }
 
 export interface ProductListResult {

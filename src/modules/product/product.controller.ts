@@ -1,9 +1,13 @@
 import type { Request, Response } from "express";
 import {
   createProduct,
+  deleteVendorProduct,
   findProductById,
   findProducts,
+  getProducts,
+  updateVendorProduct,
 } from "./product.service.js";
+import { AppError } from "../../utils/app-error.js";
 
 export async function createProductController(
   req: Request,
@@ -56,13 +60,57 @@ export async function getProductsController(
   _req: Request,
   res: Response,
 ): Promise<void> {
-  const query = res.locals.validated;
-
-  const result = await findProducts(query);
+  const products = await getProducts(res.locals.validated);
 
   res.status(200).json({
     success: true,
-    data: result.products,
-    pagination: result.pagination,
+    data: {
+      products,
+    },
+  });
+}
+
+export async function updateProductController(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  if (!req.user) {
+    throw new AppError("Authentication Required", 401);
+  }
+
+  const { id } = res.locals.validatedParams;
+
+  const product = await updateVendorProduct(
+    req.user.id,
+    id,
+    res.locals.validatedBody,
+  );
+
+  res.status(200).json({
+    success: true,
+    data: {
+      product,
+    },
+  });
+}
+
+export async function deletedProductController(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  if (!req.user) {
+    throw new AppError("Authentication Required", 401);
+  }
+
+  const { id } = res.locals.validatedParams;
+
+  const product = await deleteVendorProduct(req.user.id, id);
+
+  res.status(200).json({
+    success: true,
+    message: "Product Deactivated Successfully",
+    data: {
+      product,
+    },
   });
 }

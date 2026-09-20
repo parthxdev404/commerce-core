@@ -192,3 +192,210 @@ export async function findProducts(
     },
   };
 }
+
+export async function findProductByIdAndVendorId(
+  productId: number,
+  vendorId: number,
+): Promise<Product | null> {
+  const result = await db.query(
+    `
+      SELECT
+        id,
+        vendor_id,
+        category_id,
+        name,
+        description,
+        sku,
+        price,
+        is_active,
+        created_at,
+        updated_at
+      FROM products
+      WHERE id = $1
+        AND vendor_id = $2
+      LIMIT 1;
+    `,
+    [productId, vendorId],
+  );
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  return result.rows[0];
+}
+
+export async function findAllProducts(
+  query: ProductListQuery,
+): Promise<Product[]> {
+  const { page, limit, search, categoryId, minPrice, maxPrice, sort, order } =
+    query;
+
+  const conditions: string[] = ["is_active = TRUE"];
+
+  const values: unknown[] = [];
+
+  let parameterIndex = 1;
+
+  if (search) {
+    conditions.push(`
+      (
+        name ILIKE $${parameterIndex}
+        OR description ILIKE $${parameterIndex}
+        OR sku ILIKE $${parameterIndex}
+      )
+    `);
+
+    values.push(`%${search}%`);
+    parameterIndex++;
+  }
+
+  if (categoryId !== undefined) {
+    conditions.push(`category_id = $${parameterIndex}`);
+
+    values.push(categoryId);
+    parameterIndex++;
+  }
+
+  if (minPrice !== undefined) {
+    conditions.push(`price >= $${parameterIndex}`);
+
+    values.push(minPrice);
+    parameterIndex++;
+  }
+
+  if (maxPrice !== undefined) {
+    conditions.push(`price <= $${parameterIndex}`);
+
+    values.push(maxPrice);
+    parameterIndex++;
+  }
+
+  const allowedSortColumns = {
+    created_at: "created_at",
+    price: "price",
+    name: "name",
+  } as const;
+
+  const sortColumn = allowedSortColumns[sort];
+
+  const sortOrder = order === "asc" ? "ASC" : "DESC";
+
+  const offset = (page - 1) * limit;
+
+  values.push(limit);
+  const limitParameter = parameterIndex;
+  parameterIndex++;
+
+  values.push(offset);
+  const offsetParameter = parameterIndex;
+
+  const result = await db.query(
+    `
+      SELECT
+        id,
+        vendor_id,
+        category_id,
+        name,
+        description,
+        sku,
+        price,
+        is_active,
+        created_at,
+        updated_at
+      FROM products
+      WHERE ${conditions.join(" AND ")}
+      ORDER BY ${sortColumn} ${sortOrder}
+      LIMIT $${limitParameter}
+      OFFSET $${offsetParameter};
+    `,
+    values,
+  );
+
+  return result.rows;
+}
+
+export async function updateProductByVendor(
+  productId: number,
+  vendorId: number,
+  input: {
+    categoryId?: number;
+    name?: string;
+    description?: string;
+    price?: number;
+  },
+): Promise<Product | null> {
+  const result = await db.query(
+    `
+      UPDATE products
+      SET
+        category_id = COALESCE($1, category_id),
+        name = COALESCE($2, name),
+        description = COALESCE($3, description),
+        price = COALESCE($4, price),
+        updated_at = NOW()
+      WHERE id = $5
+        AND vendor_id = $6
+      RETURNING
+        id,
+        vendor_id,
+        category_id,
+        name,
+        description,
+        sku,
+        price,
+        is_active,
+        created_at,
+        updated_at;
+    `,
+    [
+      input.categoryId ?? null,
+      input.name ?? null,
+      input.description ?? null,
+      input.price ?? null,
+      productId,
+      vendorId,
+    ],
+  );
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  return result.rows[0];
+}
+
+export async function deactivateProductByVendor(
+  productId: number,
+  vendorId: number,
+): Promise<Product | null> {
+  const result = await db.query(
+    `
+      UPDATE products
+      SET
+        is_active = FALSE,
+        updated_at = NOW()
+      WHERE id = $1
+        AND vendor_id = $2
+        AND is_active = TRUE
+      RETURNING
+        id,
+        vendor_id,
+        category_id,
+        name,
+        description,
+        sku,
+        price,
+        is_active,
+        created_at,
+        updated_at;
+    `,
+    [productId, vendorId],
+  );
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  return result.rows[0];
+}

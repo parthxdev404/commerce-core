@@ -2,14 +2,17 @@ import { Router } from "express";
 
 import {
   createProductController,
+  deletedProductController,
   getProductByIdController,
   getProductsController,
+  updateProductController,
 } from "./product.controller.js";
 
 import {
   createProductSchema,
   productIdParamSchema,
   productListQuerySchema,
+  updateProductSchema,
 } from "./product.schema.js";
 
 import { validate } from "../../middleware/validate.middleware.js";
@@ -38,6 +41,23 @@ productRouter.get(
   "/:id",
   validate(productIdParamSchema, "params"),
   asyncHandler(getProductByIdController),
+);
+
+productRouter.patch(
+  "/:id",
+  authenticate,
+  authorize(USER_ROLES.VENDOR),
+  validate(productIdParamSchema, "params", "validatedParams"),
+  validate(updateProductSchema, "body", "validatedBody"),
+  asyncHandler(updateProductController),
+);
+
+productRouter.delete(
+  "/:id",
+  authenticate,
+  authorize(USER_ROLES.VENDOR),
+  validate(productIdParamSchema, "params", "validatedParams"),
+  asyncHandler(deletedProductController),
 );
 
 export { productRouter };
