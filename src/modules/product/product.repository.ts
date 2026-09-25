@@ -1,11 +1,9 @@
 import { db } from "../../db/client.js";
-
 import type {
   CreateProductInput,
   Product,
   ProductListQuery,
 } from "./product.types.js";
-
 export interface ProductListResult {
   products: Product[];
   total: number;
@@ -138,15 +136,6 @@ export async function findAllProducts(
   }
 
   const whereClause = conditions.join(" AND ");
-
-  /*
-   * Never directly trust a client-provided column name.
-   *
-   * SQL parameters ($1, $2...) are for values,
-   * not SQL identifiers such as column names.
-   *
-   * Therefore we whitelist the allowed columns.
-   */
   const allowedSortColumns = {
     created_at: "p.created_at",
     price: "p.price",
@@ -154,21 +143,9 @@ export async function findAllProducts(
   } as const;
 
   const sortColumn = allowedSortColumns[sort];
-
-  /*
-   * Zod already restricts this to asc/desc,
-   * but we still explicitly convert it to SQL syntax.
-   */
   const sortOrder = order === "asc" ? "ASC" : "DESC";
 
   const offset = (page - 1) * limit;
-
-  /*
-   * Count query
-   *
-   * This tells the client how many products
-   * match the current filters.
-   */
   const countResult = await db.query(
     `
       SELECT COUNT(*)::int AS total
@@ -178,12 +155,6 @@ export async function findAllProducts(
     values,
   );
 
-  /*
-   * Data query
-   *
-   * Use the same filter values and append
-   * limit + offset as additional parameters.
-   */
   const dataValues = [...values, limit, offset];
 
   const limitParameter = parameterIndex;
@@ -338,4 +309,69 @@ export async function deactivateProductByVendor(
   }
 
   return result.rows[0];
+}
+
+export async function createProductWithInventory(
+  input: CreateProductInput,
+): Promise<Product> {
+  const client = await db.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const productResult = await client.query(
+      `
+          INSERT INTO products (
+            vendor_id,
+            category_id,
+            name,
+            description,
+            sku,
+            price
+          )
+          VALUES ($1, $2, $3, $4, $5, $6)
+          RETURNING
+            id,
+            vendor_id,
+            category_id,
+            name,
+            description,
+            sku,
+            price,
+            is_active,
+            created_at,
+            updated_at;
+        `,
+      [
+        input.vendorId,
+        input.categoryId,
+        input.name,
+        input.description ?? null,
+        input.sku,
+        input.price,
+      ],
+    );
+
+    const product = productResult.rows[0];
+
+    await client.query(
+      `
+        INSERT INTO inventory (
+          product_id,
+          quantity
+        )
+        VALUES ($1, 0);
+      `,
+      [product.id],
+    );
+
+    await client.query("COMMIT");
+
+    return product;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
