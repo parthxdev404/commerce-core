@@ -1,17 +1,21 @@
 import { db } from "../../db/client.js";
+
 import type {
   CreateProductInput,
   Product,
   ProductListQuery,
-  ProductListResult,
 } from "./product.types.js";
+
+export interface ProductListResult {
+  products: Product[];
+  total: number;
+}
 
 export async function createProduct(
   input: CreateProductInput,
 ): Promise<Product> {
-  try {
-    const result = await db.query(
-      `
+  const result = await db.query(
+    `
       INSERT INTO products (
         vendor_id,
         category_id,
@@ -32,30 +36,18 @@ export async function createProduct(
         is_active,
         created_at,
         updated_at;
-      `,
-      [
-        input.vendorId,
-        input.categoryId,
-        input.name,
-        input.description ?? null,
-        input.sku,
-        input.price,
-      ],
-    );
+    `,
+    [
+      input.vendorId,
+      input.categoryId,
+      input.name,
+      input.description ?? null,
+      input.sku,
+      input.price,
+    ],
+  );
 
-    return result.rows[0];
-  } catch (error: any) {
-    // Check for PostgreSQL foreign_key_violation error code
-    if (error.code === "23503") {
-      if (error.constraint === "fk_products_vendor") {
-        throw new Error(`Vendor with ID ${input.vendorId} does not exist.`);
-      }
-      if (error.constraint === "fk_products_category") {
-        throw new Error(`Category with ID ${input.categoryId} does not exist.`);
-      }
-    }
-    throw error;
-  }
+  return result.rows[0];
 }
 
 export async function findProductById(
@@ -82,7 +74,8 @@ export async function findProductById(
       JOIN vendors v
         ON p.vendor_id = v.id
       WHERE p.id = $1
-        AND p.is_active = TRUE;
+        AND p.is_active = TRUE
+      LIMIT 1;
     `,
     [productId],
   );
@@ -94,48 +87,107 @@ export async function findProductById(
   return result.rows[0];
 }
 
-export async function findProducts(
+export async function findAllProducts(
   query: ProductListQuery,
 ): Promise<ProductListResult> {
-  const values: unknown[] = [];
+  const { page, limit, search, categoryId, minPrice, maxPrice, sort, order } =
+    query;
 
   const conditions: string[] = ["p.is_active = TRUE"];
 
-  if (query.search) {
-    values.push(`%${query.search}%`);
+  const values: unknown[] = [];
 
+  let parameterIndex = 1;
+
+  // Search
+  if (search) {
     conditions.push(`
       (
-        p.name ILIKE $${values.length}
-        OR p.description ILIKE $${values.length}
-        OR p.sku ILIKE $${values.length}
+        p.name ILIKE $${parameterIndex}
+        OR p.description ILIKE $${parameterIndex}
+        OR p.sku ILIKE $${parameterIndex}
       )
     `);
+
+    values.push(`%${search}%`);
+    parameterIndex++;
   }
 
-  if (query.categoryId !== undefined) {
-    values.push(query.categoryId);
+  // Category filter
+  if (categoryId !== undefined) {
+    conditions.push(`p.category_id = $${parameterIndex}`);
 
-    conditions.push(`p.category_id = $${values.length}`);
+    values.push(categoryId);
+    parameterIndex++;
+  }
+
+  // Minimum price
+  if (minPrice !== undefined) {
+    conditions.push(`p.price >= $${parameterIndex}`);
+
+    values.push(minPrice);
+    parameterIndex++;
+  }
+
+  // Maximum price
+  if (maxPrice !== undefined) {
+    conditions.push(`p.price <= $${parameterIndex}`);
+
+    values.push(maxPrice);
+    parameterIndex++;
   }
 
   const whereClause = conditions.join(" AND ");
 
-  const offset = (query.page - 1) * query.limit;
-
-  values.push(query.limit);
-  const limitParameter = `$${values.length}`;
-
-  values.push(offset);
-  const offsetParameter = `$${values.length}`;
-
+  /*
+   * Never directly trust a client-provided column name.
+   *
+   * SQL parameters ($1, $2...) are for values,
+   * not SQL identifiers such as column names.
+   *
+   * Therefore we whitelist the allowed columns.
+   */
   const allowedSortColumns = {
     created_at: "p.created_at",
     price: "p.price",
     name: "p.name",
-  };
+  } as const;
 
-  const sortColumn = allowedSortColumns[query.sort];
+  const sortColumn = allowedSortColumns[sort];
+
+  /*
+   * Zod already restricts this to asc/desc,
+   * but we still explicitly convert it to SQL syntax.
+   */
+  const sortOrder = order === "asc" ? "ASC" : "DESC";
+
+  const offset = (page - 1) * limit;
+
+  /*
+   * Count query
+   *
+   * This tells the client how many products
+   * match the current filters.
+   */
+  const countResult = await db.query(
+    `
+      SELECT COUNT(*)::int AS total
+      FROM products p
+      WHERE ${whereClause};
+    `,
+    values,
+  );
+
+  /*
+   * Data query
+   *
+   * Use the same filter values and append
+   * limit + offset as additional parameters.
+   */
+  const dataValues = [...values, limit, offset];
+
+  const limitParameter = parameterIndex;
+  const offsetParameter = parameterIndex + 1;
 
   const result = await db.query(
     `
@@ -158,38 +210,16 @@ export async function findProducts(
       JOIN vendors v
         ON p.vendor_id = v.id
       WHERE ${whereClause}
-      ORDER BY ${sortColumn} ${query.order}
-      LIMIT ${limitParameter}
-      OFFSET ${offsetParameter};
+      ORDER BY ${sortColumn} ${sortOrder}, p.id ASC
+      LIMIT $${limitParameter}
+      OFFSET $${offsetParameter};
     `,
-    values,
+    dataValues,
   );
-
-  const countValues = values.slice(0, values.length - 2);
-
-  const countResult = await db.query(
-    `
-      SELECT COUNT(*)::INTEGER AS total
-      FROM products p
-      JOIN categories c
-        ON p.category_id = c.id
-      JOIN vendors v
-        ON p.vendor_id = v.id
-      WHERE ${whereClause};
-    `,
-    countValues,
-  );
-
-  const total = countResult.rows[0].total;
 
   return {
     products: result.rows,
-    pagination: {
-      page: query.page,
-      limit: query.limit,
-      total,
-      totalPages: Math.ceil(total / query.limit),
-    },
+    total: countResult.rows[0].total,
   };
 }
 
@@ -223,96 +253,6 @@ export async function findProductByIdAndVendorId(
   }
 
   return result.rows[0];
-}
-
-export async function findAllProducts(
-  query: ProductListQuery,
-): Promise<Product[]> {
-  const { page, limit, search, categoryId, minPrice, maxPrice, sort, order } =
-    query;
-
-  const conditions: string[] = ["is_active = TRUE"];
-
-  const values: unknown[] = [];
-
-  let parameterIndex = 1;
-
-  if (search) {
-    conditions.push(`
-      (
-        name ILIKE $${parameterIndex}
-        OR description ILIKE $${parameterIndex}
-        OR sku ILIKE $${parameterIndex}
-      )
-    `);
-
-    values.push(`%${search}%`);
-    parameterIndex++;
-  }
-
-  if (categoryId !== undefined) {
-    conditions.push(`category_id = $${parameterIndex}`);
-
-    values.push(categoryId);
-    parameterIndex++;
-  }
-
-  if (minPrice !== undefined) {
-    conditions.push(`price >= $${parameterIndex}`);
-
-    values.push(minPrice);
-    parameterIndex++;
-  }
-
-  if (maxPrice !== undefined) {
-    conditions.push(`price <= $${parameterIndex}`);
-
-    values.push(maxPrice);
-    parameterIndex++;
-  }
-
-  const allowedSortColumns = {
-    created_at: "created_at",
-    price: "price",
-    name: "name",
-  } as const;
-
-  const sortColumn = allowedSortColumns[sort];
-
-  const sortOrder = order === "asc" ? "ASC" : "DESC";
-
-  const offset = (page - 1) * limit;
-
-  values.push(limit);
-  const limitParameter = parameterIndex;
-  parameterIndex++;
-
-  values.push(offset);
-  const offsetParameter = parameterIndex;
-
-  const result = await db.query(
-    `
-      SELECT
-        id,
-        vendor_id,
-        category_id,
-        name,
-        description,
-        sku,
-        price,
-        is_active,
-        created_at,
-        updated_at
-      FROM products
-      WHERE ${conditions.join(" AND ")}
-      ORDER BY ${sortColumn} ${sortOrder}
-      LIMIT $${limitParameter}
-      OFFSET $${offsetParameter};
-    `,
-    values,
-  );
-
-  return result.rows;
 }
 
 export async function updateProductByVendor(

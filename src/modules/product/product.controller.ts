@@ -1,58 +1,46 @@
 import type { Request, Response } from "express";
+
+import { AppError } from "../../utils/app-error.js";
+
 import {
   createProduct,
   deleteVendorProduct,
   findProductById,
-  findProducts,
   getProducts,
   updateVendorProduct,
 } from "./product.service.js";
-import { AppError } from "../../utils/app-error.js";
 
 export async function createProductController(
   req: Request,
   res: Response,
 ): Promise<void> {
-  try {
-    const product = await createProduct({
-      vendorId: Number(req.body.vendorId),
-      categoryId: Number(req.body.categoryId),
-      name: req.body.name,
-      description: req.body.description,
-      sku: req.body.sku,
-      price: Number(req.body.price),
-    });
-
-    res.status(201).json({
-      success: true,
-      data: product,
-    });
-  } catch (error: any) {
-    if (error.message && error.message.includes("does not exist")) {
-      res.status(400).json({
-        success: false,
-        error: error.message,
-      });
-      return;
-    }
-
-    res.status(500).json({
-      success: false,
-      error: "Internal server error",
-    });
+  if (!req.user) {
+    throw new AppError("Authentication required", 401);
   }
+
+  const product = await createProduct(req.user.id, res.locals.validated);
+
+  res.status(201).json({
+    success: true,
+    data: {
+      product,
+    },
+  });
 }
 
 export async function getProductByIdController(
-  req: Request,
+  _req: Request,
   res: Response,
 ): Promise<void> {
-  const productId = Number(req.params.id);
-  const product = await findProductById(productId);
+  const { id } = res.locals.validated;
+
+  const product = await findProductById(id);
 
   res.status(200).json({
     success: true,
-    data: product,
+    data: {
+      product,
+    },
   });
 }
 
@@ -60,12 +48,20 @@ export async function getProductsController(
   _req: Request,
   res: Response,
 ): Promise<void> {
-  const products = await getProducts(res.locals.validated);
+  const { products, total } = await getProducts(res.locals.validated);
+
+  const { page, limit } = res.locals.validated;
 
   res.status(200).json({
     success: true,
     data: {
       products,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     },
   });
 }
@@ -75,7 +71,7 @@ export async function updateProductController(
   res: Response,
 ): Promise<void> {
   if (!req.user) {
-    throw new AppError("Authentication Required", 401);
+    throw new AppError("Authentication required", 401);
   }
 
   const { id } = res.locals.validatedParams;
@@ -94,12 +90,12 @@ export async function updateProductController(
   });
 }
 
-export async function deletedProductController(
+export async function deleteProductController(
   req: Request,
   res: Response,
 ): Promise<void> {
   if (!req.user) {
-    throw new AppError("Authentication Required", 401);
+    throw new AppError("Authentication required", 401);
   }
 
   const { id } = res.locals.validatedParams;
@@ -108,7 +104,7 @@ export async function deletedProductController(
 
   res.status(200).json({
     success: true,
-    message: "Product Deactivated Successfully",
+    message: "Product deactivated successfully",
     data: {
       product,
     },

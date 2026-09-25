@@ -2,7 +2,7 @@ import { Router } from "express";
 
 import {
   createProductController,
-  deletedProductController,
+  deleteProductController,
   getProductByIdController,
   getProductsController,
   updateProductController,
@@ -19,6 +19,7 @@ import { validate } from "../../middleware/validate.middleware.js";
 import { asyncHandler } from "../../utils/async-handler.js";
 import { authenticate } from "../../middleware/auth.middlware.js";
 import { authorize } from "../../middleware/authorize.middleware.js";
+
 import { USER_ROLES } from "../auth/auth.constant.js";
 
 const productRouter = Router();
@@ -26,7 +27,7 @@ const productRouter = Router();
 productRouter.post(
   "/",
   authenticate,
-  authorize(USER_ROLES.VENDOR, USER_ROLES.ADMIN),
+  authorize(USER_ROLES.VENDOR),
   validate(createProductSchema),
   asyncHandler(createProductController),
 );
@@ -57,7 +58,7 @@ productRouter.delete(
   authenticate,
   authorize(USER_ROLES.VENDOR),
   validate(productIdParamSchema, "params", "validatedParams"),
-  asyncHandler(deletedProductController),
+  asyncHandler(deleteProductController),
 );
 
 export { productRouter };

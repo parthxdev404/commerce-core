@@ -1,34 +1,40 @@
 import { AppError } from "../../utils/app-error.js";
+
 import { findVendorByUserId } from "../vendor/vendor.repository.js";
+
 import {
-  createProduct as CreateProductRepository,
+  createProduct as createProductRepository,
   deactivateProductByVendor,
   findAllProducts,
   findProductByIdAndVendorId,
   findProductById as findProductByIdRepository,
-  findProducts as findProductsRepository,
+  updateProductByVendor,
 } from "./product.repository.js";
+
 import type {
   CreateProductInput,
   Product,
   ProductListQuery,
-  ProductListResult,
 } from "./product.types.js";
 
 export async function createProduct(
-  input: CreateProductInput,
+  userId: number,
+  input: Omit<CreateProductInput, "vendorId">,
 ): Promise<Product> {
-  if (input.name.trim().length === 0) {
-    throw new Error("Product name is Required");
-  }
-  if (input.sku.trim().length === 0) {
-    throw new Error("Product SKU is required");
-  }
-  if (input.price < 0) {
-    throw new Error("Product Price cannot be negative");
+  const vendor = await findVendorByUserId(userId);
+
+  if (!vendor) {
+    throw new AppError("Vendor profile not found", 404);
   }
 
-  return CreateProductRepository(input);
+  if (!vendor.isActive) {
+    throw new AppError("Vendor account is inactive", 403);
+  }
+
+  return createProductRepository({
+    ...input,
+    vendorId: vendor.id,
+  });
 }
 
 export async function getProducts(query: ProductListQuery) {
@@ -41,13 +47,8 @@ export async function findProductById(productId: number): Promise<Product> {
   if (!product) {
     throw new AppError("Product not found", 404);
   }
-  return product;
-}
 
-export async function findProducts(
-  query: ProductListQuery,
-): Promise<ProductListResult> {
-  return findProductsRepository(query);
+  return product;
 }
 
 export async function updateVendorProduct(
@@ -66,6 +67,10 @@ export async function updateVendorProduct(
     throw new AppError("Vendor profile not found", 404);
   }
 
+  if (!vendor.isActive) {
+    throw new AppError("Vendor account is inactive", 403);
+  }
+
   const product = await findProductByIdAndVendorId(productId, vendor.id);
 
   if (!product) {
@@ -76,7 +81,11 @@ export async function updateVendorProduct(
     throw new AppError("Cannot update an inactive product", 400);
   }
 
-  const updatedProduct = await updateVendorProduct(productId, vendor.id, input);
+  const updatedProduct = await updateProductByVendor(
+    productId,
+    vendor.id,
+    input,
+  );
 
   if (!updatedProduct) {
     throw new AppError("Product could not be updated", 409);
@@ -95,10 +104,18 @@ export async function deleteVendorProduct(
     throw new AppError("Vendor profile not found", 404);
   }
 
+  if (!vendor.isActive) {
+    throw new AppError("Vendor account is inactive", 403);
+  }
+
   const product = await findProductByIdAndVendorId(productId, vendor.id);
 
   if (!product) {
     throw new AppError("Product not found or you do not own this product", 404);
+  }
+
+  if (!product.isActive) {
+    throw new AppError("Product is already inactive", 400);
   }
 
   const deletedProduct = await deactivateProductByVendor(productId, vendor.id);

@@ -25,18 +25,8 @@ export interface ProductListQuery {
   limit: number;
   search?: string;
   categoryId?: number;
+  minPrice?: number;
+  maxPrice?: number;
   sort: "created_at" | "price" | "name";
   order: "asc" | "desc";
-  minPrice: number;
-  maxPrice: number;
-}
-
-export interface ProductListResult {
-  products: Product[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
 }
