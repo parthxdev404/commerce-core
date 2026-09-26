@@ -39,10 +39,18 @@ export async function updateInventory(
     throw new AppError("Vendor profile not found", 404);
   }
 
+  if (!vendor.isActive) {
+    throw new AppError("Vendor account is inactive", 403);
+  }
+
   const product = await findProductByIdAndVendorId(productId, vendor.id);
 
   if (!product) {
     throw new AppError("Product not found or you do not own this product", 404);
+  }
+
+  if (!product.isActive) {
+    throw new AppError("Cannot update inventory for an inactive product", 400);
   }
 
   const inventory = await updateInventoryQuantity(productId, input);
